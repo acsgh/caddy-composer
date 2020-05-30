@@ -4,6 +4,16 @@ import (
 	"go.uber.org/zap"
 )
 
+func (ctx *ComposeContext) logCompositionDebug(message string, method *string, url *string) {
+	ctx.webComposer.logger.Info(
+		message,
+		zap.String("request.url", ctx.httpRequest.URL.String()),
+		zap.String("request.method", ctx.httpRequest.Method),
+		zap.String("component.url", *url),
+		zap.String("component.method", *method),
+	)
+}
+
 func (ctx *ComposeContext) logCompositionInfo(message string, method *string, url *string, name *string) {
 	ctx.webComposer.logger.Info(
 		message,

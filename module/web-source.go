@@ -21,6 +21,7 @@ type WebSource struct {
 	responseHeaders    *http.Header
 	responseContent    *string
 	cachedUntil        *time.Time
+	loadTime           *time.Duration
 }
 
 type WebComponent struct {
@@ -45,6 +46,8 @@ func newSource(method *string, url *string, body *string) *WebSource {
 }
 
 func (s *WebSource) load(c ComposeContext) error {
+	ti := time.Now()
+	c.logCompositionDebug("composition fetching remote", s.url, s.method)
 	requestBody := ""
 
 	if s.body != nil {
@@ -77,6 +80,8 @@ func (s *WebSource) load(c ComposeContext) error {
 	s.responseStatusCode = &response.StatusCode
 	s.responseHeaders = &response.Header
 	s.responseContent = &dataString
+	duration := ti.Sub(time.Now())
+	s.loadTime = &duration
 
 	return nil
 }

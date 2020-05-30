@@ -21,14 +21,25 @@ type ComposeContext struct {
 }
 
 func (ctx *ComposeContext) compose(payload string) (*string, error) {
-	defaultMethod := GET
-
 	doc, err := parseString(&payload)
+
 	if err != nil {
 		return nil, err
 	}
 
-	divs := cascadia.MustCompile("div").MatchAll(doc)
+	err = ctx.composeNode(doc, doc)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return renderToString(doc)
+}
+
+func (ctx *ComposeContext) composeNode(doc *html.Node, node *html.Node) error {
+	defaultMethod := GET
+
+	divs := cascadia.MustCompile("div").MatchAll(node)
 	for _, div := range divs {
 		url := attr(div, AttributeUrlKey, nil)
 		method := attr(div, AttributeMethodKey, &defaultMethod)
@@ -43,34 +54,60 @@ func (ctx *ComposeContext) compose(payload string) (*string, error) {
 			if err != nil {
 				ctx.logCompositionError("composition error", url, method, name, err)
 			} else {
-				_ = replaceComponent(doc, webComponent, div)
+				_ = ctx.replaceComponent(doc, webComponent, div)
 			}
 		}
 	}
 
-	return renderToString(doc)
+	return nil
 }
 
-func replaceComponent(doc *html.Node, component *WebComponent, dst *html.Node) error {
-	_ = replaceContent(dst, component.content)
+func (ctx *ComposeContext) replaceComponent(doc *html.Node, component *WebComponent, dst *html.Node) error {
+	err := ctx.composeNode(doc, component.content)
+
+	if err != nil {
+		return err
+	}
+
+	replaceContent(dst, component.content)
 
 	head := cascadia.MustCompile("head").MatchFirst(doc)
-
-	if head != nil {
-		for _, stylesheet := range component.stylesheets {
-			_ = appendContent(head, stylesheet)
-		}
-	}
+	attachIfRequired(head, "link", "href", component.stylesheets)
 
 	body := cascadia.MustCompile("body").MatchFirst(doc)
-
-	if body != nil {
-		for _, script := range component.scripts {
-			_ = appendContent(head, script)
-		}
-	}
+	attachIfRequired(body, "script", "src", component.scripts)
 
 	return nil
+}
+
+func attachIfRequired(parent *html.Node, nodeName string, attrName string, nodes []*html.Node) {
+	if parent != nil {
+		for _, node := range nodes {
+			src := attr(node, attrName, nil)
+
+			if src != nil {
+				if !containsNode(parent, nodeName, attrName, src) {
+					appendContent(parent, node)
+				}
+			} else {
+				appendContent(parent, node)
+			}
+		}
+	}
+}
+
+func containsNode(parent *html.Node, nodeName string, attrName string, src *string) bool {
+	nodes := cascadia.MustCompile(nodeName).MatchAll(parent)
+	for _, node := range nodes {
+		nodeSrc := attr(node, attrName, nil)
+
+		if src != nil {
+			if *nodeSrc == *src {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func (ctx ComposeContext) getWebComponent(method *string, url *string, body *string, name *string) (*WebComponent, error) {

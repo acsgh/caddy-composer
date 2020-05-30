@@ -22,18 +22,15 @@ func replaceContentWithString(parent *html.Node, data *string) {
 	replaceContent(parent, node)
 }
 
-func appendContent(parent *html.Node, child *html.Node) error {
-	node, err := clone(child)
+func appendContent(parent *html.Node, child *html.Node) {
+	child.Parent = nil
+	child.PrevSibling = nil
+	child.NextSibling = nil
 
-	if err != nil {
-		return err
-	}
-
-	parent.AppendChild(node)
-	return nil
+	parent.AppendChild(child)
 }
 
-func replaceContent(parent *html.Node, child *html.Node) error {
+func replaceContent(parent *html.Node, child *html.Node) {
 	childToRemove := parent.FirstChild
 
 	for childToRemove != nil {
@@ -41,7 +38,17 @@ func replaceContent(parent *html.Node, child *html.Node) error {
 		childToRemove = parent.FirstChild
 	}
 
-	return appendContent(parent, child)
+	parent.Attr = child.Attr
+	parent.Data = child.Data
+	parent.DataAtom = child.DataAtom
+
+	childTmp := child.FirstChild
+
+	for childTmp != nil {
+		toAppend := childTmp
+		childTmp = childTmp.NextSibling
+		appendContent(parent, toAppend)
+	}
 }
 
 func renderToString(node *html.Node) (*string, error) {
@@ -59,16 +66,4 @@ func renderToString(node *html.Node) (*string, error) {
 func parseString(input *string) (*html.Node, error) {
 	reader := strings.NewReader(*input)
 	return html.Parse(reader)
-}
-
-func clone(node *html.Node) (*html.Node, error) {
-	str, err := renderToString(node)
-
-	if err != nil {
-		return nil, err
-	}
-
-	println(*str)
-
-	return parseString(str)
 }
