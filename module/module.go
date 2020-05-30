@@ -34,26 +34,26 @@ func (WebComposer) CaddyModule() caddy.ModuleInfo {
 }
 
 // Provision implements caddy.Provisioner.
-func (m *WebComposer) Provision(ctx caddy.Context) error {
-	m.logger = ctx.Logger(m) // g.logger is a *zap.Logger
-	m.logger.Info("Starting Web-Composer module")
+func (w *WebComposer) Provision(ctx caddy.Context) error {
+	w.logger = ctx.Logger(w) // g.logger is a *zap.Logger
+	w.logger.Info("Starting Web-Composer module")
 
-	if m.MIMETypes == nil {
-		m.MIMETypes = defaultMIMETypes
+	if w.MIMETypes == nil {
+		w.MIMETypes = defaultMIMETypes
 	}
 
-	m.cache = m.createCache()
+	w.cache = w.createCache()
 
 	return nil
 }
 
 // Validate implements caddy.Validator.
-func (m *WebComposer) Validate() error {
+func (w *WebComposer) Validate() error {
 	return nil
 }
 
 // ServeHTTP implements caddyhttp.MiddlewareHandler.
-func (m WebComposer) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyhttp.Handler) error {
+func (w WebComposer) ServeHTTP(rw http.ResponseWriter, r *http.Request, next caddyhttp.Handler) error {
 	buf := bufPool.Get().(*bytes.Buffer)
 	buf.Reset()
 	defer bufPool.Put(buf)
@@ -62,14 +62,14 @@ func (m WebComposer) ServeHTTP(w http.ResponseWriter, r *http.Request, next cadd
 	// since generally we will not want to execute for images or CSS, etc.
 	shouldBuf := func(status int, header http.Header) bool {
 		ct := header.Get("Content-Type")
-		for _, mt := range m.MIMETypes {
+		for _, mt := range w.MIMETypes {
 			if strings.Contains(ct, mt) {
 				return true
 			}
 		}
 		return false
 	}
-	rec := caddyhttp.NewResponseRecorder(w, buf, shouldBuf)
+	rec := caddyhttp.NewResponseRecorder(rw, buf, shouldBuf)
 
 	err := next.ServeHTTP(rec, r)
 	if err != nil {
@@ -79,7 +79,7 @@ func (m WebComposer) ServeHTTP(w http.ResponseWriter, r *http.Request, next cadd
 		return nil
 	}
 
-	err = m.composeRequest(rec, r)
+	err = w.composeRequest(rec, r)
 	if err != nil {
 		return err
 	}
@@ -96,10 +96,10 @@ func (m WebComposer) ServeHTTP(w http.ResponseWriter, r *http.Request, next cadd
 	return rec.WriteResponse()
 }
 
-func (m *WebComposer) composeRequest(rr caddyhttp.ResponseRecorder, r *http.Request) error {
+func (w *WebComposer) composeRequest(rr caddyhttp.ResponseRecorder, r *http.Request) error {
 	buffer := rr.Buffer()
 
-	composeContext := m.createContext(r)
+	composeContext := w.createContext(r)
 
 	result, err := composeContext.compose(buffer.String())
 
@@ -113,23 +113,16 @@ func (m *WebComposer) composeRequest(rr caddyhttp.ResponseRecorder, r *http.Requ
 	return err
 }
 
-func (m *WebComposer) createContext(request *http.Request) *ComposeContext {
+func (w *WebComposer) createContext(request *http.Request) *ComposeContext {
 	composeContext := new(ComposeContext)
-	composeContext.webComposer = m
-	composeContext.httpClient = m.newHttpClient()
-	composeContext.responseCache = make(map[string]*Response)
+	composeContext.webComposer = w
+	composeContext.httpClient = w.newHttpClient()
+	composeContext.cache = w.createCache()
 	composeContext.httpRequest = request
 	return composeContext
 }
 
-func (m *WebComposer) createCache() *Cache {
-	cache := new(Cache)
-	cache.logger = m.logger
-	cache.entries = make(map[string]*CacheEntry)
-	return cache
-}
-
-func (m WebComposer) newHttpClient() *http.Client {
+func (w WebComposer) newHttpClient() *http.Client {
 	result := new(http.Client)
 	return result
 }
@@ -142,7 +135,7 @@ func parseCaddyfile(h httpcaddyfile.Helper) (caddyhttp.MiddlewareHandler, error)
 }
 
 // UnmarshalCaddyfile implements caddyfile.Unmarshaler.
-func (m *WebComposer) UnmarshalCaddyfile(d *caddyfile.Dispenser) error {
+func (w *WebComposer) UnmarshalCaddyfile(d *caddyfile.Dispenser) error {
 	return nil
 }
 

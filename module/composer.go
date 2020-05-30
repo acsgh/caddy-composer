@@ -1,10 +1,9 @@
 package module
 
 import (
-	"crypto/sha256"
-	"encoding/base64"
 	"github.com/andybalholm/cascadia"
 	"github.com/pkg/errors"
+	"golang.org/x/net/html"
 	"net/http"
 )
 
@@ -12,21 +11,13 @@ const GET = "get"
 const AttributeUrlKey = "data-webc-url"
 const AttributeMethodKey = "data-webc-method"
 const AttributeNameKey = "data-webc-name"
+const AttributeBodyKey = "data-webc-body"
 
 type ComposeContext struct {
-	webComposer   *WebComposer
-	httpClient    *http.Client
-	httpRequest   *http.Request
-	responseCache map[string]*Response
-}
-
-type WebComponent struct {
-	method          *string
-	url             *string
-	name            *string
-	body            *string
-	content         *string
-	responseHeaders *http.Header
+	webComposer *WebComposer
+	httpClient  *http.Client
+	httpRequest *http.Request
+	cache       *Cache
 }
 
 func (ctx *ComposeContext) compose(payload string) (*string, error) {
@@ -42,68 +33,78 @@ func (ctx *ComposeContext) compose(payload string) (*string, error) {
 		url := attr(div, AttributeUrlKey, nil)
 		method := attr(div, AttributeMethodKey, &defaultMethod)
 		name := attr(div, AttributeNameKey, nil)
+		body := attr(div, AttributeBodyKey, nil)
 
 		if url != nil && name != nil {
 			ctx.logCompositionInfo("composition request", url, method, name)
 
-			remoteResponse, err := ctx.getRemoteContent(method, url, nil)
+			webComponent, err := ctx.getWebComponent(method, url, body, name)
 
 			if err != nil {
 				ctx.logCompositionError("composition error", url, method, name, err)
+			} else {
+				_ = replaceComponent(doc, webComponent, div)
 			}
-
-			if remoteResponse.statusCode != 200 {
-				err := errors.Errorf("The remote response was %s", remoteResponse.statusCode)
-				ctx.logCompositionError("composition error", url, method, name, err)
-			}
-
-			//println(remoteResponse.statusCode)
-			//println(*remoteResponse.body)
-			//content := *method + " " + *url + " " + *name
-			replaceContentWithString(div, remoteResponse.body)
 		}
 	}
 
 	return renderToString(doc)
 }
 
-func (c ComposeContext) getRemoteContent(method *string, url *string, body *string) (*Response, error) {
-	requestHash := hash(method, url, body)
-	cachedResponse := c.responseCache[requestHash]
+func replaceComponent(doc *html.Node, component *WebComponent, dst *html.Node) error {
+	_ = replaceContent(dst, component.content)
 
-	if cachedResponse != nil {
-		return cachedResponse, nil
-	} else {
-		response, err := c.execRemoteContent(method, url, body)
+	head := cascadia.MustCompile("head").MatchFirst(doc)
+
+	if head != nil {
+		for _, stylesheet := range component.stylesheets {
+			_ = appendContent(head, stylesheet)
+		}
+	}
+
+	body := cascadia.MustCompile("body").MatchFirst(doc)
+
+	if body != nil {
+		for _, script := range component.scripts {
+			_ = appendContent(head, script)
+		}
+	}
+
+	return nil
+}
+
+func (ctx ComposeContext) getWebComponent(method *string, url *string, body *string, name *string) (*WebComponent, error) {
+	source := newSource(method, url, body)
+
+	loadedSource, _ := ctx.webComposer.cache.get(source.id)
+
+	if loadedSource == nil {
+		loadedSource, _ = ctx.cache.get(source.id)
+	}
+
+	if loadedSource == nil {
+		err := source.load(ctx)
 
 		if err != nil {
 			return nil, err
 		}
 
-		c.responseCache[requestHash] = response
-		return response, nil
-	}
-}
+		loadedSource = source
+		ctx.cache.set(loadedSource, nil)
 
-func hash(method *string, url *string, body *string) string {
-	input := ""
+		if loadedSource.cachedUntil != nil {
+			ctx.webComposer.cache.set(loadedSource, loadedSource.cachedUntil)
+		}
 
-	hasher := sha256.New()
-
-	if method != nil {
-		input += *method
-		hasher.Write([]byte(*method))
+		if *loadedSource.responseStatusCode != 200 {
+			err := errors.Errorf("The remote response was %d", *loadedSource.responseStatusCode)
+			return nil, err
+		}
 	}
 
-	if url != nil {
-		hasher.Write([]byte("-"))
-		hasher.Write([]byte(*url))
+	if loadedSource == nil {
+		return nil, errors.Errorf("Component source invalid")
 	}
 
-	if body != nil {
-		hasher.Write([]byte("-"))
-		hasher.Write([]byte(*body))
-	}
-
-	return base64.URLEncoding.EncodeToString(hasher.Sum(nil))
+	return loadedSource.getWebComponent(name)
 }

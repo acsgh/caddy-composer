@@ -22,7 +22,18 @@ func replaceContentWithString(parent *html.Node, data *string) {
 	replaceContent(parent, node)
 }
 
-func replaceContent(parent *html.Node, child *html.Node) {
+func appendContent(parent *html.Node, child *html.Node) error {
+	node, err := clone(child)
+
+	if err != nil {
+		return err
+	}
+
+	parent.AppendChild(node)
+	return nil
+}
+
+func replaceContent(parent *html.Node, child *html.Node) error {
 	childToRemove := parent.FirstChild
 
 	for childToRemove != nil {
@@ -30,7 +41,7 @@ func replaceContent(parent *html.Node, child *html.Node) {
 		childToRemove = parent.FirstChild
 	}
 
-	parent.AppendChild(child)
+	return appendContent(parent, child)
 }
 
 func renderToString(node *html.Node) (*string, error) {
@@ -48,4 +59,16 @@ func renderToString(node *html.Node) (*string, error) {
 func parseString(input *string) (*html.Node, error) {
 	reader := strings.NewReader(*input)
 	return html.Parse(reader)
+}
+
+func clone(node *html.Node) (*html.Node, error) {
+	str, err := renderToString(node)
+
+	if err != nil {
+		return nil, err
+	}
+
+	println(*str)
+
+	return parseString(str)
 }

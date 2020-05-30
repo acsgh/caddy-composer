@@ -12,7 +12,7 @@ type Response struct {
 	body       *string
 }
 
-func (c ComposeContext) execRemoteContent(method *string, url *string, body *string) (*Response, error) {
+func (ctx ComposeContext) execRemoteContent(method *string, url *string, body *string) (*Response, error) {
 	requestBody := ""
 	if body != nil {
 		requestBody = *body

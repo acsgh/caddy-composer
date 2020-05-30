@@ -9,7 +9,7 @@ Requirements:
 ### For development
  
 ```bash
-$ git clone "https://github.comacsgh/caddy-composer.git"
+$ git clone "https://github.com/acsgh/caddy-composer.git"
 $ cd caddy-composer/
 $ go build
 ```
