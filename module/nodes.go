@@ -2,6 +2,7 @@ package module
 
 import (
 	"bytes"
+	"github.com/andybalholm/cascadia"
 	"golang.org/x/net/html"
 	"strings"
 )
@@ -66,4 +67,34 @@ func renderToString(node *html.Node) (*string, error) {
 func parseString(input *string) (*html.Node, error) {
 	reader := strings.NewReader(*input)
 	return html.Parse(reader)
+}
+
+func attachIfRequired(parent *html.Node, nodeName string, attrName string, nodes []*html.Node) {
+	if parent != nil {
+		for _, node := range nodes {
+			src := attr(node, attrName, nil)
+
+			if src != nil {
+				if !containsNode(parent, nodeName, attrName, src) {
+					appendContent(parent, node)
+				}
+			} else {
+				appendContent(parent, node)
+			}
+		}
+	}
+}
+
+func containsNode(parent *html.Node, nodeName string, attrName string, src *string) bool {
+	nodes := cascadia.MustCompile(nodeName).MatchAll(parent)
+	for _, node := range nodes {
+		nodeSrc := attr(node, attrName, nil)
+
+		if src != nil {
+			if *nodeSrc == *src {
+				return true
+			}
+		}
+	}
+	return false
 }

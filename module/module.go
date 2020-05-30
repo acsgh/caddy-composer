@@ -99,7 +99,7 @@ func (w WebComposer) ServeHTTP(rw http.ResponseWriter, r *http.Request, next cad
 func (w *WebComposer) composeRequest(rr caddyhttp.ResponseRecorder, r *http.Request) error {
 	buffer := rr.Buffer()
 
-	composeContext := w.createContext(r)
+	composeContext := w.createContext(r, &rr)
 
 	result, err := composeContext.compose(buffer.String())
 
@@ -113,12 +113,13 @@ func (w *WebComposer) composeRequest(rr caddyhttp.ResponseRecorder, r *http.Requ
 	return err
 }
 
-func (w *WebComposer) createContext(request *http.Request) *ComposeContext {
+func (w *WebComposer) createContext(request *http.Request, response *caddyhttp.ResponseRecorder) *ComposeContext {
 	composeContext := new(ComposeContext)
 	composeContext.webComposer = w
 	composeContext.httpClient = w.newHttpClient()
 	composeContext.cache = w.createCache()
 	composeContext.httpRequest = request
+	composeContext.httpResponse = response
 	return composeContext
 }
 

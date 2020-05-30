@@ -2,9 +2,11 @@ package module
 
 import (
 	"github.com/andybalholm/cascadia"
+	"github.com/caddyserver/caddy/v2/modules/caddyhttp"
 	"github.com/pkg/errors"
 	"golang.org/x/net/html"
 	"net/http"
+	"strings"
 )
 
 const GET = "get"
@@ -14,10 +16,11 @@ const AttributeNameKey = "data-webc-name"
 const AttributeBodyKey = "data-webc-body"
 
 type ComposeContext struct {
-	webComposer *WebComposer
-	httpClient  *http.Client
-	httpRequest *http.Request
-	cache       *Cache
+	webComposer  *WebComposer
+	httpClient   *http.Client
+	httpRequest  *http.Request
+	httpResponse *caddyhttp.ResponseRecorder
+	cache        *Cache
 }
 
 func (ctx *ComposeContext) compose(payload string) (*string, error) {
@@ -69,6 +72,7 @@ func (ctx *ComposeContext) replaceComponent(doc *html.Node, component *WebCompon
 		return err
 	}
 
+	ctx.handoverResponseHeader(component.headers)
 	replaceContent(dst, component.content)
 
 	head := cascadia.MustCompile("head").MatchFirst(doc)
@@ -80,34 +84,19 @@ func (ctx *ComposeContext) replaceComponent(doc *html.Node, component *WebCompon
 	return nil
 }
 
-func attachIfRequired(parent *html.Node, nodeName string, attrName string, nodes []*html.Node) {
-	if parent != nil {
-		for _, node := range nodes {
-			src := attr(node, attrName, nil)
+func (ctx *ComposeContext) handoverResponseHeader(header *http.Header) {
+	for key, values := range *header {
+		add := strings.HasPrefix(key, "X-") || strings.EqualFold(key, "Set-Cookie")
+		if add {
+			response := *ctx.httpResponse
 
-			if src != nil {
-				if !containsNode(parent, nodeName, attrName, src) {
-					appendContent(parent, node)
+			for _, value := range values {
+				if !containsHeaderValue(response.Header(), key, value) {
+					response.Header().Add(key, value)
 				}
-			} else {
-				appendContent(parent, node)
 			}
 		}
 	}
-}
-
-func containsNode(parent *html.Node, nodeName string, attrName string, src *string) bool {
-	nodes := cascadia.MustCompile(nodeName).MatchAll(parent)
-	for _, node := range nodes {
-		nodeSrc := attr(node, attrName, nil)
-
-		if src != nil {
-			if *nodeSrc == *src {
-				return true
-			}
-		}
-	}
-	return false
 }
 
 func (ctx ComposeContext) getWebComponent(method *string, url *string, body *string, name *string) (*WebComponent, error) {

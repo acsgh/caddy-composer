@@ -31,7 +31,6 @@ type WebComponent struct {
 	content     *html.Node
 	scripts     []*html.Node
 	stylesheets []*html.Node
-	cachedUntil *time.Time
 }
 
 func newSource(method *string, url *string, body *string) *WebSource {
@@ -60,6 +59,8 @@ func (s *WebSource) load(c ComposeContext) error {
 	if err != nil {
 		return err
 	}
+
+	c.handoverRequestHeader(request.Header)
 
 	response, err := c.httpClient.Do(request)
 
@@ -135,7 +136,6 @@ func (s *WebSource) getWebComponent(name *string) (*WebComponent, error) {
 	component.name = name
 	component.source = s
 	component.headers = s.responseHeaders
-	component.cachedUntil = s.cachedUntil
 	component.content = componentNode
 
 	head := cascadia.MustCompile("head").MatchFirst(doc)
@@ -151,4 +151,28 @@ func (s *WebSource) getWebComponent(name *string) (*WebComponent, error) {
 	}
 
 	return component, nil
+}
+
+func (ctx *ComposeContext) handoverRequestHeader(header http.Header) {
+	for key, values := range ctx.httpRequest.Header {
+		add := strings.HasPrefix(key, "X-") || strings.EqualFold(key, "Cookie")
+		if add {
+			for _, value := range values {
+				if !containsHeaderValue(header, key, value) {
+					header.Add(key, value)
+				}
+			}
+		}
+	}
+}
+
+func containsHeaderValue(header http.Header, targetKey string, targetValue string) bool {
+	for key, values := range header {
+		for _, value := range values {
+			if strings.EqualFold(targetKey, key) && targetValue == value {
+				return true
+			}
+		}
+	}
+	return false
 }
