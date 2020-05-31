@@ -90,8 +90,8 @@ func containsNode(parent *html.Node, nodeName string, attrName string, src *stri
 	for _, node := range nodes {
 		nodeSrc := attr(node, attrName, nil)
 
-		if src != nil {
-			if *nodeSrc == *src {
+		if src != nil && nodeSrc != nil {
+			if *src == *nodeSrc {
 				return true
 			}
 		}

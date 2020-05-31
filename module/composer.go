@@ -30,6 +30,21 @@ func (ctx *ComposeContext) compose(payload string) (*string, error) {
 		return nil, err
 	}
 
+	if ctx.isDebugEnabled() {
+		head := cascadia.MustCompile("head").MatchFirst(doc)
+
+		if head != nil{
+			appendContent(head, debugStyleNode())
+		}
+
+		body := cascadia.MustCompile("body").MatchFirst(doc)
+
+		if body != nil{
+			appendContent(body, debugModalNode())
+			appendContent(body, debugScriptNode())
+		}
+	}
+
 	err = ctx.composeNode(doc, doc)
 
 	if err != nil {
@@ -72,8 +87,14 @@ func (ctx *ComposeContext) replaceComponent(doc *html.Node, component *WebCompon
 		return err
 	}
 
+	content := component.content
+
+	if ctx.isDebugEnabled() {
+		content = decorateNodeWithDebugInformation(component, content)
+	}
+
 	ctx.handoverResponseHeader(component.headers)
-	replaceContent(dst, component.content)
+	replaceContent(dst, content)
 
 	head := cascadia.MustCompile("head").MatchFirst(doc)
 	attachIfRequired(head, "link", "href", component.stylesheets)
