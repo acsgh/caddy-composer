@@ -8,6 +8,7 @@ import (
 	"golang.org/x/net/html"
 	"io/ioutil"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -83,7 +84,23 @@ func (s *WebSource) load(c ComposeContext) error {
 	s.responseContent = &dataString
 	duration := ti.Sub(time.Now())
 	s.loadTime = &duration
+	s.cachedUntil = s.calculateCachedUntil()
 
+	return nil
+}
+
+func (s *WebSource) calculateCachedUntil() *time.Time {
+	prefix := "max-age="
+	value := s.responseHeaders.Get("Cache-Control")
+	if strings.HasPrefix(value, prefix) {
+		number, err := strconv.Atoi(strings.ReplaceAll(value, prefix, ""))
+
+		if err == nil {
+			result := time.Now()
+			result = result.Add(time.Duration(number) * time.Second)
+			return &result
+		}
+	}
 	return nil
 }
 
@@ -155,8 +172,7 @@ func (s *WebSource) getWebComponent(name *string) (*WebComponent, error) {
 
 func (ctx *ComposeContext) handoverRequestHeader(header http.Header) {
 	for key, values := range ctx.httpRequest.Header {
-		add := strings.HasPrefix(key, "X-") || strings.EqualFold(key, "Cookie")
-		if add {
+		if ctx.mustHandoverHeader(key) {
 			for _, value := range values {
 				if !containsHeaderValue(header, key, value) {
 					header.Add(key, value)

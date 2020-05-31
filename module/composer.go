@@ -86,8 +86,7 @@ func (ctx *ComposeContext) replaceComponent(doc *html.Node, component *WebCompon
 
 func (ctx *ComposeContext) handoverResponseHeader(header *http.Header) {
 	for key, values := range *header {
-		add := strings.HasPrefix(key, "X-") || strings.EqualFold(key, "Set-Cookie")
-		if add {
+		if ctx.mustHandoverHeader(key) {
 			response := *ctx.httpResponse
 
 			for _, value := range values {
@@ -133,4 +132,11 @@ func (ctx ComposeContext) getWebComponent(method *string, url *string, body *str
 	}
 
 	return loadedSource.getWebComponent(name)
+}
+
+func (ctx *ComposeContext) mustHandoverHeader(key string) bool {
+	return strings.HasPrefix(key, "X-") ||
+		strings.EqualFold(key, "Set-Cookie") ||
+		strings.EqualFold(key, "Cookie") ||
+		strings.EqualFold(key, "Authorization")
 }
