@@ -6,7 +6,7 @@ import (
 	"github.com/andybalholm/cascadia"
 	"github.com/pkg/errors"
 	"golang.org/x/net/html"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"strconv"
 	"strings"
@@ -69,13 +69,17 @@ func (s *WebSource) load(c ComposeContext) error {
 		return err
 	}
 
-	data, err := ioutil.ReadAll(response.Body)
+	data, err := io.ReadAll(response.Body)
 
 	if err != nil {
 		return err
 	}
 
-	response.Body.Close()
+	err = response.Body.Close()
+
+	if err != nil {
+		return err
+	}
 
 	dataString := string(data)
 
